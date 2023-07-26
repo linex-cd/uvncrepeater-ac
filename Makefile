@@ -6,9 +6,10 @@ prefix  = /usr/local
 CC      = gcc
 LD      = gcc
 CFLAGS  = -W -Wall # -ansi -D_XOPEN_SOURCE=500
-LDFLAGS =
-OPT     = -O2
-OBJS    = repeater.o repeaterproc.o openbsd_stringfuncs.o iniparser.o readini.o repeaterevents.o in46_addr.o
+LDFLAGS = 
+OPT     = -O2 
+OBJS    = repeater.o repeaterproc.o openbsd_stringfuncs.o iniparser.o readini.o repeaterevents.o in46_addr.o info.o
+LIBS	= -lpthread
 
 ifeq ($(V), 1)
 THECC = $(CC)
@@ -32,7 +33,7 @@ release: all
 CFLAGS += $(OPT) -DREPEATER_VERSION=\"$(VERSION)\"
 
 repeater: $(OBJS)
-	$(THELD) $(LDFLAGS) -o $@ $(OBJS)
+	$(THELD) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
 %.o: %.c
 	$(THECC) $(CFLAGS) -c $< -o $@

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "commondefines.h": "c",
+        "info.h": "c",
+        "repeater.h": "c"
+    }
+}

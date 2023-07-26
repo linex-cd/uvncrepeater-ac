@@ -51,100 +51,34 @@
 #include <arpa/inet.h>
 #include <pwd.h>        /* for getpwnam() in dropPrivileges() */
 
-#include "commondefines.h"
+
 #include "repeaterproc.h"
 #include "readini.h"
 #include "repeaterevents.h"
 #include "repeater.h"
 
-#ifndef REPEATER_VERSION
-#define REPEATER_VERSION "devel"
-#endif
-
-#define RFB_PROTOCOL_VERSION_FORMAT "RFB %03d.%03d\n"
-#define RFB_PROTOCOL_MAJOR_VERSION 0
-#define RFB_PROTOCOL_MINOR_VERSION 0
-#define SIZE_RFBPROTOCOLVERSIONMSG 12
-
-#define RFB_PORT_OFFSET 5900                /* servers 1st display is in this port number */
-#define MAX_IDLE_CONNECTION_TIME 600        /* Seconds */
-#define MAX_HOST_NAME_LEN 250
-#define MAX_PATH 250
-#define MAX_HANDSHAKE_LEN 100
-#define UNKNOWN_REPINFO_IND 999999          /* Notice: This should always be bigger than maxSessions */
-
-#define LISTEN_BACKLOG  5                   /* Listen() queues 5 connections */
-
-/* connectionFrom defines for acceptConnection(). Used also in connectionRemover() */
-#define CONNECTION_FROM_SERVER 0
-#define CONNECTION_FROM_VIEWER 1
+#include "info.h"
 
 /* Use safer openbsd stringfuncs: strlcpy, strlcat */
 #include "openbsd_stringfuncs.h"
 
 typedef char rfbProtocolVersionMsg[SIZE_RFBPROTOCOLVERSIONMSG+1]; /* allow extra byte for null */
 
-typedef struct _repeaterInfo {
-    int socket;
+repeaterInfo *servers[MAX_SESSIONS_MAX];
 
-    /* Code is used for cross-connection between servers and viewers
-     * In Mode 2, Server/Viewer sends IdCode string "ID:xxxxx", where xxxxx is
-     *   some positive (1 or bigger) long integer number
-     * In Mode 1, Repeater "invents" a non-used code (negative number) and
-     *   assigns that to both Server/Viewer
-     *   code == 0 means that entry in servers[] / viewers[] table is free
-     */
-    long code;
+repeaterInfo *viewers[MAX_SESSIONS_MAX];
 
-    unsigned long timeStamp;
-
-    /* Ip address of peer */
-    struct in46_addr peerIp;
-
-    /* There are 3 connection levels (using variables "code" and "active"):
-     * A. code==0,active==false: fully idle, no connection attempt detected
-     * B. code==non-zero,active==false: server/viewer has connected, waiting for other end to connect
-     * C. code==non-zero,active=true: doRepeater() running on viewer/server connection, fully active
-     * -after viewer/server disconnects or some error in doRepeater, returns both to level A
-     * (and closes respective sockets)
-     * This logic means, that when one end disconnects, BOTH ends need to reconnect.
-     * This is not a bug, it is a feature ;-)
-     */
-    bool active;
-} repeaterInfo;
-static repeaterInfo *servers[MAX_SESSIONS_MAX];
-static repeaterInfo *viewers[MAX_SESSIONS_MAX];
+repeaterProcInfo *repeaterProcs[MAX_SESSIONS_MAX];
 
 
-/* Server handshake strings for use when respective viewer connects later */
-typedef struct _handShakeInfo
-{
-    char handShake[MAX_HANDSHAKE_LEN];
-    int handShakeLength;
-} handShakeInfo;
+
 static handShakeInfo *handShakes[MAX_SESSIONS_MAX];
 
-/* mode1ConnCode is used in Mode1 to "invent" code field in repeaterInfo,
- * when new Mode1 connection from viewer is accepted. This is just decremented
- * for each new Mode 1 connection to ensure unique number for each Mode 1 session
- * Values for this are:
- *    0 = program has just started,
- *   -1....MIN_INVENTED_CONN_CODE: Codes for each session
- */
-#define MIN_INVENTED_CONN_CODE -1000000
+
 static long mode1ConnCode;
 
 
-/* This structure (and repeaterProcs[] table) is used for
- * keeping track of child processes running doRepeater
- * and cleaning up after they exit
- */
-typedef struct _repeaterProcInfo
-{
-    long code;
-    pid_t pid;
-} repeaterProcInfo;
-static repeaterProcInfo *repeaterProcs[MAX_SESSIONS_MAX];
+
 
 
 /* This structure keeps information of ports/socket used when
@@ -2093,6 +2027,11 @@ int main(int argc, char **argv)
 
     /* If we got lists allocated, we can run */
     if (memoryOk) {
+
+
+        /* Start http server*/
+        start_info();
+
         /* Initialize ctrl+c signal handler */
         memset(&saInt, 0, sizeof(saInt));
 
