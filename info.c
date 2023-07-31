@@ -42,7 +42,48 @@ void start_info()
 
 */
 
+
 extern int maxSessions;
+
+
+void* client_thread(void *conn)
+{
+
+    int new_socket = (int)conn;
+    char buffer[30000] = {0};
+    read(new_socket, buffer, 30000);
+    printf("%s\n", buffer);
+
+    char command[256] = {0};
+    //sscanf(buffer, "GET /%s ", command);
+    sscanf(buffer, "GET %s ", command);
+    printf("Command: %s\n", command);
+
+
+    
+    long len = sizeof(char) * maxSessions * 128;
+    char *resp = malloc(len);
+
+    memset(resp, 0, len);
+    info_to_string(resp);
+
+    char header[256] = {0}; 
+    
+
+    sprintf(header, "HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: %d\n\n", strlen(resp));
+
+    write(new_socket, header, strlen(header));
+
+
+    write(new_socket, resp, strlen(resp));
+
+
+    printf("------------------Hello %s------------------\n", command);
+    close(new_socket);
+
+    free(resp);
+}
+
 
 void info_to_string(char* buf)
 {
@@ -113,7 +154,6 @@ void info_to_string(char* buf)
     }
     strcat(buf, "]}");
 
-
    
 
 }
@@ -147,10 +187,9 @@ void *thread_info(void *arg)
         exit(EXIT_FAILURE);
     }
 
-    long len = sizeof(char) * maxSessions * 128;
-    char *resp = malloc(len);
+   
 
-    printf("resp=0x%x, maxSessions = %d\n ", resp, maxSessions);
+    printf("maxSessions = %d\n ",  maxSessions);
 
     
 
@@ -162,38 +201,12 @@ void *thread_info(void *arg)
             exit(EXIT_FAILURE);
         }
 
-        char buffer[30000] = {0};
-        read(new_socket, buffer, 30000);
-        printf("%s\n", buffer);
-
-        char command[256] = {0};
-        //sscanf(buffer, "GET /%s ", command);
-        sscanf(buffer, "GET %s ", command);
-        printf("Command: %s\n", command);
-
-        
-
-       
-
-        memset(resp, 0, len);
-        info_to_string(resp);
-
-        char header[256] = {0}; 
-        
-
-        sprintf(header, "HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: %d\n\n", strlen(resp));
-
-        write(new_socket, header, strlen(header));
-
-
-        write(new_socket, resp, strlen(resp));
-
-
-        printf("------------------Hello %s------------------\n", command);
-        close(new_socket);
+        //use a thead to process connection
+        pthread_t thread;
+        pthread_create(&thread, NULL, client_thread, (void *)new_socket);
     }
 
-    free(resp);
+    
 
     return 0;
 }

@@ -13,5 +13,6 @@
 #define PORT 5908
 
 void start_info();
+void* client_thread(void *conn);
 void info_to_string(char* buf);
 void *thread_info(void *arg);
