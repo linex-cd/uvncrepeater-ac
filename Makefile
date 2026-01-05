@@ -6,9 +6,9 @@ prefix  = /usr/local
 CC      = gcc
 LD      = gcc
 CFLAGS  = -W -Wall # -ansi -D_XOPEN_SOURCE=500
-LDFLAGS = 
+LDFLAGS =  
 OPT     = -O2 
-OBJS    = repeater.o repeaterproc.o openbsd_stringfuncs.o iniparser.o readini.o repeaterevents.o in46_addr.o info.o
+OBJS    = repeater.o repeaterproc.o openbsd_stringfuncs.o iniparser.o readini.o repeaterevents.o in46_addr.o info.o record.o buffer.o
 LIBS	= -lpthread
 
 ifeq ($(V), 1)

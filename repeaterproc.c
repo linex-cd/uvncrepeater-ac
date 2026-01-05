@@ -40,12 +40,21 @@
 #include "commondefines.h"
 #include "repeater.h"
 
+#include "record.h"
+
+ 
 #define LOCAL_SOCKET	1
 #ifndef FD_ALLOC
 #define FD_ALLOC(nfds) ((fd_set*) malloc((nfds+7) / 8 ) )
 #endif
 
 
+
+#include <stdio.h>
+#include "record.h"
+
+#define BUFSIZE 65535
+pthread_t thread;
 /* Return values:
  * 1: Error (in select)
  * 2: Server has disconnected
@@ -53,14 +62,15 @@
  * 4: Error when reading from viewer
  * 5: Error when reading from server
  */
-int doRepeater(int server, int viewer)
+int doRepeater(int server, int viewer, long idCode)
 {
+    int exit_code = 0;
     /** vars for viewer input data **/
-    char viewerBuf[1024];           /* viewer input buffer */
+    char viewerBuf[BUFSIZE];           /* viewer input buffer */
     int viewerBufLen;               /* available data in viewerBuf */
 
     /** vars for server input data **/
-    char serverBuf[1024];           /* server input buffer */
+    char serverBuf[BUFSIZE];           /* server input buffer */
     int serverBufLen;               /* available data in serverBuf */
 
     /** other variables **/
@@ -74,6 +84,20 @@ int doRepeater(int server, int viewer)
     nfds = ((viewer < server) ? server : viewer) + 1;
     viewerBufLen = 0;
     serverBufLen = 0;
+
+    /*record*/
+    /*前3帧缓存判断是否认证成功*/
+    int frame_count = 0;
+    int bytes_count = 0;
+    char tmpbuf[32] = {0};
+    
+    FILE*  filehandle = 0;
+    char filename[500] = {0};
+    
+    get_filename(idCode, filename);
+
+
+    //pthread_t thread;
 
     while (true) {
         FD_ZERO(&ifds);
@@ -98,7 +122,9 @@ int doRepeater(int server, int viewer)
                 */
                 debug(LEVEL_2, "doRepeater(): select() failed, errno=%d (%s)\n", errno, strerror(errno));
             }
-            return 1;
+            exit_code = 1;
+            goto EXIT;
+            //return 1;
         }
 
         /*
@@ -112,7 +138,9 @@ int doRepeater(int server, int viewer)
                 debug(LEVEL_3, "doRepeater(): connection closed by server\n");
 
                 /* When server closes connection, parent process should also disconnect viewer */
-                return 2;
+                exit_code = 2;
+                goto EXIT;
+                //return 2;
             }
             else if (len == -1) {
                 if (errno != ECONNRESET) {
@@ -143,7 +171,9 @@ int doRepeater(int server, int viewer)
                 debug(LEVEL_3, "doRepeater(): connection closed by viewer\n");
 
                 /* When viewer closes connection,parent process should also disconnect server */
-                return 3;
+                exit_code = 3;
+                goto EXIT;
+                //return 3;
             }
             else if (len == -1) {
 
@@ -151,7 +181,9 @@ int doRepeater(int server, int viewer)
                  * error on reading from viewer
                  */
                 debug(LEVEL_2, "doRepeater(): recv() from viewer failed, errno = %d (%s)\n", errno, strerror(errno));
-                return 4;
+                exit_code = 4;
+                goto EXIT;
+                //return 4;
             }
             else {
 
@@ -190,6 +222,74 @@ int doRepeater(int server, int viewer)
          */
         if (0 < serverBufLen) {
             len = send(viewer, serverBuf, serverBufLen, 0);
+            
+            //printf("frame_count %d dispatching %d bytes\n", frame_count, serverBufLen);
+
+            if(frame_count < 3)
+            {
+               
+                memcpy(tmpbuf + bytes_count, serverBuf, serverBufLen);
+
+                bytes_count = bytes_count + serverBufLen;
+                
+                frame_count = frame_count + 1;
+
+                if(frame_count == 3)
+                {
+                    /* check auth status*/
+
+                    if (bytes_count == 22 &&  tmpbuf[18] == 0 && tmpbuf[19] == 0 && tmpbuf[20] == 0 && tmpbuf[21] == 0)
+                    {
+                        printf("auth ok:%ld\n", idCode);
+
+                        char filename[500] = {0};
+                        
+                        get_filename(idCode, filename);
+
+                        filehandle = fopen(filename, "wb");
+
+                        if (filehandle == 0)
+                        {
+                            printf("create file err: %s \n", filename);
+                            return ERR;
+                        }
+
+                        printf("create file %x ok: %s \n", filehandle, filename);
+
+
+
+                        //启动存储线程
+                        pthread_create(&thread, NULL, record_thread, filehandle);
+
+                        
+
+                        int res = begin_session(filehandle);
+                        printf("starting record %d file=%x\n", res, filehandle);
+                        if(res)
+                        {
+                            printf("record idcode:%ld\n", idCode);
+
+                        }
+
+                    }
+                    else{
+                        printf("auth failed:%ld\n%d %d %d %d\n", idCode, tmpbuf[18], tmpbuf[19], tmpbuf[20], tmpbuf[21]);
+                        //讲道理应该退掉了
+                        exit_code = 5;
+                        goto EXIT;
+                    }
+                }
+                
+            }
+            else
+            {
+                 //printf("dispatching to %x of %d bytes\n", filehandle, serverBufLen);
+                 dispatch_session(filehandle, serverBufLen, (void*)serverBuf);
+
+  
+  
+            }
+            
 
             if (len == -1) {
                 debug(LEVEL_2, "doRepeater(): send() (to viewer) failed, errno=%d (%s)\n", errno, strerror(errno));
@@ -204,5 +304,25 @@ int doRepeater(int server, int viewer)
             }
         }
     }
-    return 0; /* to make gcc happy */
+
+EXIT:
+    printf("exiting doRepeater:%d\n", exit_code);
+    int t = end_session(filehandle);
+    printf("end_session doRepeater %d\n", t);
+
+    //等待列队清空
+    int buf_size = get_buf_length(filehandle);
+    while(buf_size)
+    {
+        buf_size = get_buf_length(filehandle);
+    }
+    pthread_join(&thread, NULL);
+
+    frame_count = 0;
+    bytes_count = 0;
+    memset(tmpbuf, 0, 32);
+    memset(filename, 0, 500);
+
+    printf("exited doRepeater\n");
+    return exit_code; /* to make gcc happy */
 }

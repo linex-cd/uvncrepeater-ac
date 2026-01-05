@@ -31,6 +31,8 @@
 #ifndef REPEATERPROC_H
 #define REPEATERPROC_H
 
-extern int doRepeater(int server, int viewer);
+extern int doRepeater(int server, int viewer, long idCode);
+
+#include "record.h"
 
 #endif

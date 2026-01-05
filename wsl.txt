@@ -1,0 +1,19 @@
+
+# netsh interface portproxy add v4tov4 listenport=[win10端口] listenaddress=0.0.0.0 connectport=[虚拟机的端口] connectaddress=[虚拟机的ip]
+
+
+netsh interface portproxy add v4tov4 listenport=5500 listenaddress=0.0.0.0 connectport=5500 connectaddress=172.20.20.12
+netsh interface portproxy add v4tov4 listenport=5900 listenaddress=0.0.0.0 connectport=5900 connectaddress=172.20.20.12
+netsh interface portproxy add v4tov4 listenport=5908 listenaddress=0.0.0.0 connectport=5908 connectaddress=172.20.20.12
+
+netsh interface portproxy delete v4tov4 listenport=5500 listenaddress=0.0.0.0
+netsh interface portproxy delete v4tov4 listenport=5900 listenaddress=0.0.0.0
+netsh interface portproxy delete v4tov4 listenport=5908 listenaddress=0.0.0.0
+
+侦听 ipv4:                 连接到 ipv4:
+
+地址            端口        地址            端口
+--------------- ----------  --------------- ----------
+0.0.0.0         5908        172.20.20.12    5908
+0.0.0.0         5900        172.20.20.12    5900
+0.0.0.0         5500        172.20.20.12    5500

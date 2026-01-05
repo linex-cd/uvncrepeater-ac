@@ -1068,7 +1068,7 @@ static void forkRepeater(int serverSocket, int viewerSocket, long idCode)
     else if (0 == pid) {
         /* child code */
         debug(LEVEL_3, "forkRepeater(): in child process, starting doRepeater(%d, %d)\n", serverSocket, viewerSocket);
-        exit(doRepeater(serverSocket, viewerSocket));
+        exit(doRepeater(serverSocket, viewerSocket, idCode));
     }
     else {
         /* parent code
@@ -1337,6 +1337,7 @@ static void acceptConnection(int socket, int connectionFrom)
                         fViewerOk = false;  /* Out of slots in viewer table */
 
                     /* Add new server */
+                    printf("addServerList 1\n");
                     serverInd = addServerList(server, mode1ConnCode, connMode1ServerIp);
                     if (-1 != serverInd) {
                         setServerActive(mode1ConnCode);
@@ -1346,6 +1347,7 @@ static void acceptConnection(int socket, int connectionFrom)
 
                     if ((fServerOk) && (fViewerOk)) {
                         /* fork repeater */
+                        printf(" if ((fServerOk) && (fViewerOk)) {\n");
                         forkRepeater(server, connection, mode1ConnCode);
 
                         /* Send appropriate events to event interface
@@ -1480,6 +1482,7 @@ static void acceptConnection(int socket, int connectionFrom)
                                 handShakes[serverInd] -> handShakeLength, TIMEOUT_5SECS);
 
                         /* fork repeater */
+                        printf(" if (serverInd != UNKNOWN_REPINFO_IND) {\n");
                         forkRepeater(server, connection, code);
 
                         /* Send VIEWER_SERVER_SESSION_START to event interface */
@@ -1520,6 +1523,7 @@ static void acceptConnection(int socket, int connectionFrom)
                 int serverInd;
 
                 /* Add server to tables, initialize handshake to nil */
+                printf("addServerList 2\n");
                 serverInd = addServerList(connection, code, peerIp);
                 if (serverInd != -1) {
                     handShakes[serverInd] -> handShakeLength = 0;
@@ -1969,6 +1973,16 @@ static void dropRootPrivileges()
         fatal("dropRootPrivileges(): getpwnam() failed\n");
 }
 
+void* live_thread(void *conn)
+{
+    while (!stopped)
+    {
+        puts("checking removeOldOrBrokenConnections();");
+        removeOldOrBrokenConnections();
+        sleep(10);
+    }
+    
+}
 
 int main(int argc, char **argv)
 {
@@ -2028,8 +2042,11 @@ int main(int argc, char **argv)
     /* If we got lists allocated, we can run */
     if (memoryOk) {
 
+        /*检查连接状态*/
+        pthread_t t;
+        pthread_create(&t, 0, live_thread, 0);
 
-        /* Start http server*/
+        /* 状态查询服务*/
         start_info();
 
         /* Initialize ctrl+c signal handler */
@@ -2064,6 +2081,9 @@ int main(int argc, char **argv)
 
         close(viewerListener.socket);
         close(serverListener.socket);
+
+
+
     }
 
     /* Free allocated memory of repeater lists */
